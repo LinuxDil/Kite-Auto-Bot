@@ -45,8 +45,8 @@ class KiteAi:
         banner_lines = figlet.renderText('Airdrop Seeker').splitlines()
         term_width = shutil.get_terminal_size().columns
 
-    for line in banner_lines:
-        print(Fore.GREEN + Style.BRIGHT + line.center(term_width) + Style.RESET_ALL)
+        for line in banner_lines:
+            print(Fore.GREEN + Style.BRIGHT + line.center(term_width) + Style.RESET_ALL)
 
     def format_seconds(self, seconds):
         hours, remainder = divmod(seconds, 3600)
