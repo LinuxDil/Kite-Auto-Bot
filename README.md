@@ -30,20 +30,25 @@ git clone https://github.com/linuxdil/Kite-Auto-Bot.git
 cd Kite-Auto-Bot
 ```
 
-2. Install dependencies:
+2. Create Environments:
 ```bash
-npm install
+python3 -m venv myenv
+soource myenv/bin/activated
 ```
 
+3. Install dependencies:
+```bash
+pip intall -r requirements.txt
+```
 ## 📝 Configuration
 
-1. (Optional) Create a `proxies.txt` file for proxy support:
+1. (Optional) Create a `proxy.txt` file for proxy support:
 ```
 http://user:pass@host:port
 socks5://user:pass@host:port
 ```
 
-2. Create a `wallets.txt` file for multiple wallets:
+2. Create a `accounts.txt` file for multiple wallets:
 ```
 wallet address
 wallet address 2
@@ -53,7 +58,7 @@ wallet address 2
 
 Run the bot:
 ```bash
-npm run start
+python3 bot.py
 ```
 
 The bot will prompt you to:
@@ -63,11 +68,7 @@ The bot will prompt you to:
 
 ## ⚙️ Configuration Options
 
-You can modify the following settings in `index.js`:
-
-- `rateLimitConfig`: Adjust rate limiting parameters
-- `agents`: Modify available AI agents
-- `intervalBetweenCycles`: Change delay between interaction cycles
+You can modify the following settings in `bot.py`:
 
 ## ⚠️ Disclaimer
 
