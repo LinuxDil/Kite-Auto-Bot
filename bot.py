@@ -41,7 +41,7 @@ class KiteAi:
         )
 
     def welcome(self):
-        figlet = Figlet(font='slant')
+        figlet = Figlet(font='doom')
         banner_lines = figlet.renderText('Airdrop Seeker').splitlines()
         term_width = shutil.get_terminal_size().columns
 
