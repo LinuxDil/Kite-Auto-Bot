@@ -33,7 +33,7 @@ cd Kite-Auto-Bot
 2. Create Environments:
 ```bash
 python3 -m venv myenv
-soource myenv/bin/activated
+source myenv/bin/activated
 ```
 
 3. Install dependencies:
