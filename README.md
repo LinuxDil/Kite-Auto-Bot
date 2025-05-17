@@ -17,11 +17,6 @@ https://t.me/airdropseeker_official
 - Usage reporting
 - Graceful error handling
 
-## 📋 Prerequisites
-
-- Node.js (v16 or higher)
-- npm (Node Package Manager)
-
 ## 🛠️ Installation
 
 1. Clone the repository:
