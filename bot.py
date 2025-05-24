@@ -1,13 +1,12 @@
-from aiohttp import (
-    ClientResponseError,
-    ClientSession,
-    ClientTimeout
-)
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from aiohttp import ClientResponseError, ClientSession, ClientTimeout
 from aiohttp_socks import ProxyConnector
 from fake_useragent import FakeUserAgent
+from eth_account import Account
 from colorama import *
 from datetime import datetime
-import asyncio, random, time, json, os, pytz
+import asyncio, binascii, random, json, os, pytz
 from pyfiglet import Figlet
 import shutil
 
@@ -16,18 +15,24 @@ wib = pytz.timezone('Asia/Jakarta')
 class KiteAi:
     def __init__(self) -> None:
         self.headers = {
+            "Accept-Language": "application/json, text/plain, */*",
             "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Origin": "https://agents.testnet.gokite.ai",
-            "Referer": "https://agents.testnet.gokite.ai/",
+            "Origin": "https://testnet.gokite.ai",
+            "Referer": "https://testnet.gokite.ai/",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-Site": "same-site",
             "User-Agent": FakeUserAgent().random
         }
-        self.BASE_API = "https://quests-usage-dev.prod.zettablock.com/api"
+        self.NEO_API = "https://neo.prod.gokite.ai/v2"
+        self.OZONE_API = "https://ozone-point-system.prod.gokite.ai"
+        self.KEY_HEX = "6a1c35292b7c5b769ff47d89a17e7bc4f0adfe1b462981d28e0e9f7ff20b8f8a"
         self.proxies = []
         self.proxy_index = 0
         self.account_proxies = {}
+        self.auth_tokens = {}
+        self.access_tokens = {}
+        self.header_cookies = {}
         self.user_interactions = {}
 
     def clear_terminal(self):
@@ -41,8 +46,8 @@ class KiteAi:
         )
 
     def welcome(self):
-        figlet = Figlet(font='slant')
-        banner_lines = figlet.renderText('Airdrop Seeker').splitlines()
+        figlet = Figlet(font='ansi_shadow')
+        banner_lines = figlet.renderText('BG WIN').splitlines()
         term_width = shutil.get_terminal_size().columns
 
         for line in banner_lines:
@@ -107,7 +112,63 @@ class KiteAi:
         self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
         return proxy
     
-    def request_text_lists(self, agent_name: str):
+    def generate_address(self, private_key: str):
+        try:
+            account = Account.from_key(private_key)
+            address = account.address
+            
+            return address
+        except Exception as e:
+            return None
+    
+    def hex_to_bytes(self, hex_str):
+        return bytes.fromhex(hex_str)
+
+    def bytes_to_hex(self, bytes):
+        return binascii.hexlify(bytes).decode()
+
+    def encrypt(self, address):
+        key = self.hex_to_bytes(self.KEY_HEX)
+        iv = os.urandom(12)
+        encryptor = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend()).encryptor()
+
+        ciphertext = encryptor.update(address.encode()) + encryptor.finalize()
+        auth_tag = encryptor.tag
+
+        result = iv + ciphertext + auth_tag
+        return self.bytes_to_hex(result)
+
+    def generate_auth_token(self, address):
+        return self.encrypt(address)
+    
+    def generate_quiz_title(self):
+        today = datetime.today().strftime('%Y-%m-%d')
+        return f"daily_quiz_{today}"
+    
+    def extract_cookies(self, raw_cookies: list):
+        cookies_dict = {}
+        try:
+            skip_keys = ['expires', 'path', 'domain', 'samesite', 'secure', 'httponly', 'max-age']
+
+            for cookie_str in raw_cookies:
+                cookie_parts = cookie_str.split(';')
+
+                for part in cookie_parts:
+                    cookie = part.strip()
+
+                    if '=' in cookie:
+                        name, value = cookie.split('=', 1)
+
+                        if name and value and name.lower() not in skip_keys:
+                            cookies_dict[name] = value
+
+            cookie_header = "; ".join([f"{key}={value}" for key, value in cookies_dict.items()])
+            
+            return cookie_header
+        except Exception as e:
+            return None
+        
+    def question_lists(self, agent_name: str):
         if agent_name == "Professor":
             return [
                 "What is Kite AI's core technology?",
@@ -218,47 +279,55 @@ class KiteAi:
             return [
                 "What do you think of this transaction? 0x252c02bded9a24426219248c9c1b065b752d3cf8bedf4902ed62245ab950895b"
             ]
-    
+        
     def agent_lists(self, agent_name: str):
         agent_lists = {}
         try:
             if agent_name == "Professor":
-                agent_lists["agent_url"] = "https://deployment-kazqlqgrjw8hbr8blptnpmtj.staging.gokite.ai/main"
-                agent_lists["agent_id"] = "deployment_JtmpnULoMfudGPRhHjTWQlS7"
-                agent_lists["name"] = agent_name
-                agent_lists["question"] = random.choice(self.request_text_lists(agent_name))
+                agent_lists["service_id"] = "deployment_KiMLvUiTydioiHm7PWZ12zJU"
+                agent_lists["title"] = agent_name
+                agent_lists["message"] = random.choice(self.question_lists(agent_name))
 
             elif agent_name == "Crypto Buddy":
-                agent_lists["agent_url"] = "https://deployment-0ovyzutzgttaydzu6eqn9bxi.staging.gokite.ai/main"
-                agent_lists["agent_id"] = "deployment_fseGykIvCLs3m9Nrpe9Zguy9"
-                agent_lists["name"] = agent_name
-                agent_lists["question"] = random.choice(self.request_text_lists(agent_name))
+                agent_lists["service_id"] = "deployment_ByVHjMD6eDb9AdekRIbyuz14"
+                agent_lists["title"] = agent_name
+                agent_lists["message"] = random.choice(self.question_lists(agent_name))
 
             elif agent_name == "Sherlock":
-                agent_lists["agent_url"] = "https://deployment-tqgv8vboiwipbkgsmzgdmwpm.staging.gokite.ai/main"
-                agent_lists["agent_id"] = "deployment_MK9ej2jNz2rFuzuWZjdb1UmR"
-                agent_lists["name"] = agent_name
-                agent_lists["question"] = random.choice(self.request_text_lists(agent_name))
+                agent_lists["service_id"] = "deployment_OX7sn2D0WvxGUGK8CTqsU5VJ"
+                agent_lists["title"] = agent_name
+                agent_lists["message"] = random.choice(self.question_lists(agent_name))
 
             return agent_lists
         except Exception as e:
             return None
-    
-    def generate_payload(self, address: str, agent_id: str, req_text: str, resp_text: str, ttft: int, total_time: int):
-        try:
-            payload = {
-                "wallet_address":address,
-                "agent_id":agent_id,
-                "request_text":req_text,
-                "response_text":resp_text,
-                "ttft":ttft,
-                "total_time":total_time,
-                "request_metadata":{}
+        
+    def generate_inference_payload(self, service_id: str, question: str):
+        payload = {
+            "service_id":service_id,
+            "subnet":"kite_ai_labs",
+            "stream":True,
+            "body":{
+                "stream":True,
+                "message":question
             }
-
-            return payload
-        except Exception as e:
-            return None
+        }
+        return payload
+        
+    def generate_receipt_payload(self, address: str, service_id: str, question: str, answer: str):
+        payload = {
+            "address":address,
+            "service_id":service_id,
+            "input":[{
+                "type":"text/plain",
+                "value":question
+            }],
+            "output":[{
+                "type":"text/plain",
+                "value":answer
+            }]
+        }
+        return payload
     
     def mask_account(self, account):
         mask_account = account[:6] + '*' * 6 + account[-6:]
@@ -296,24 +365,55 @@ class KiteAi:
                 else:
                     print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter 'y' or 'n'.{Style.RESET_ALL}")
 
-        return choose, rotate
-    
-    async def check_connection(self, proxy=None):
-        connector = ProxyConnector.from_url(proxy) if proxy else None
-        try:
-            async with ClientSession(connector=connector, timeout=ClientTimeout(total=30)) as session:
-                async with session.get(url="https://agents.testnet.gokite.ai", headers={}) as response:
-                    response.raise_for_status()
-                    return True
-        except (Exception, ClientResponseError) as e:
-            return None
+        while True:
+            try:
+                count = int(input(f"{Fore.YELLOW + Style.BRIGHT}How Many Times Would You Like to Interact With Kite AI Agents? -> {Style.RESET_ALL}").strip())
+                if count > 0:
+                    break
+                else:
+                    print(f"{Fore.RED + Style.BRIGHT}Please enter a positive number.{Style.RESET_ALL}")
+            except ValueError:
+                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number.{Style.RESET_ALL}")
+
+        return count, choose, rotate
         
-    async def user_stats(self, address: str, proxy=None, retries=5):
-        url = f"{self.BASE_API}/user/{address}/stats"
+    async def user_signin(self, address: str, proxy=None, retries=5):
+        url = f"{self.NEO_API}/signin"
+        data = json.dumps({"eoa":address})
         headers = {
             **self.headers,
-            "Accept": "*/*",
+            "Authorization": self.auth_tokens[address],
+            "Content-Length": str(len(data)),
+            "Content-Type": "application/json"
         }
+        await asyncio.sleep(3)
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+
+                        raw_cookies = response.headers.getall('Set-Cookie', [])
+                        if raw_cookies:
+                            cookie_header = self.extract_cookies(raw_cookies)
+
+                            if cookie_header:
+                                return result["data"]["access_token"], cookie_header
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                return None, None
+        
+    async def user_data(self, address: str, proxy=None, retries=5):
+        url = f"{self.OZONE_API}/me"
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {self.access_tokens[address]}"
+        }
+        await asyncio.sleep(3)
         for attempt in range(retries):
             connector = ProxyConnector.from_url(proxy) if proxy else None
             try:
@@ -327,15 +427,63 @@ class KiteAi:
                     continue
                 return None
         
-    async def report_usage(self, address: str, agent_id: str, req_text: str, resp_text: str, ttft: int, total_time: int, proxy=None, retries=5):
-        url = f"{self.BASE_API}/report_usage"
-        data = json.dumps(self.generate_payload(address, agent_id, req_text, resp_text, ttft, total_time))
+    async def create_quiz(self, address: str, proxy=None, retries=5):
+        url = f"{self.NEO_API}/quiz/create"
+        data = json.dumps({"title":self.generate_quiz_title(), "num":1, "eoa":address})
         headers = {
             **self.headers,
-            "Accept": "*/*",
+            "Authorization": f"Bearer {self.access_tokens[address]}",
+            "Cookie": self.header_cookies[address],
             "Content-Length": str(len(data)),
             "Content-Type": "application/json"
         }
+        await asyncio.sleep(3)
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        self.log(await response.text())
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                return None
+        
+    async def get_quiz(self, address: str, quiz_id: int, proxy=None, retries=5):
+        url = f"{self.NEO_API}/quiz/get?id={quiz_id}&eoa={address}"
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {self.access_tokens[address]}",
+            "Cookie": self.header_cookies[address]
+        }
+        await asyncio.sleep(3)
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.get(url=url, headers=headers) as response:
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                return None
+            
+    async def submit_quiz(self, address: str, proxy=None, retries=5):
+        url = f"{self.NEO_API}/quiz/submit"
+        data = json.dumps({})
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {self.access_tokens[address]}",
+            "Cookie": self.header_cookies[address],
+            "Content-Length": str(len(data)),
+            "Content-Type": "application/json"
+        }
+        await asyncio.sleep(3)
         for attempt in range(retries):
             connector = ProxyConnector.from_url(proxy) if proxy else None
             try:
@@ -349,74 +497,72 @@ class KiteAi:
                     continue
                 return None
             
-    async def perfrom_agent(self, agent_url: str, req_text: str, proxy=None, retries=5, stream_timeout=10):
-        data = json.dumps({"message": req_text, "stream": True})
+    async def agent_inference(self, address: str, service_id: str, question: str, proxy=None, retries=5):
+        url = f"{self.OZONE_API}/agent/inference"
+        data = json.dumps(self.generate_inference_payload(service_id, question))
         headers = {
             **self.headers,
-            "Accept": "text/event-stream",
+            "Authorization": f"Bearer {self.access_tokens[address]}",
             "Content-Length": str(len(data)),
             "Content-Type": "application/json"
         }
-
+        await asyncio.sleep(3)
         for attempt in range(retries):
             connector = ProxyConnector.from_url(proxy) if proxy else None
             try:
                 async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
-                    start_time = time.time()
-                    first_token_time = None
-                    last_token_time = time.time()
-                    resp_text = ""
-
-                    async with session.post(url=agent_url, headers=headers, data=data) as response:
+                    async with session.post(url=url, headers=headers, data=data) as response:
                         response.raise_for_status()
+                        result = ""
 
                         async for line in response.content:
-                            now = time.time()
-
-                            if now - last_token_time > stream_timeout:
-                                return None
-
                             line = line.decode("utf-8").strip()
                             if line.startswith("data:"):
                                 try:
                                     json_data = json.loads(line[len("data:"):].strip())
                                     delta = json_data.get("choices", [{}])[0].get("delta", {})
                                     content = delta.get("content")
-
-                                    if content and first_token_time is None:
-                                        first_token_time = now
-
                                     if content:
-                                        resp_text += content
-                                        last_token_time = now
+                                        result += content
                                 except json.JSONDecodeError:
                                     continue
 
-                    end_time = time.time()
-                    ttft = (first_token_time - start_time) * 1000 if first_token_time else None
-                    total_time = (end_time - start_time) * 1000
-
-                    return {
-                        "resp_text": resp_text,
-                        "ttft": ttft,
-                        "total_time": total_time
-                    }
-
+                        return result
             except (Exception, ClientResponseError) as e:
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
                 return None
             
-    async def process_check_connection(self, address: str, use_proxy: bool, rotate_proxy: bool):
-        message = "Checking Connection, Wait..."
-        if use_proxy:
-            message = "Checking Proxy Connection, Wait..."
-
+    async def submit_receipt(self, address: str, sa_address: str, service_id: str, question: str, answer: str, proxy=None, retries=5):
+        url = f"{self.NEO_API}/submit_receipt"
+        data = json.dumps(self.generate_receipt_payload(sa_address, service_id, question, answer))
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {self.access_tokens[address]}",
+            "Cookie": self.header_cookies[address],
+            "Content-Length": str(len(data)),
+            "Content-Type": "application/json"
+        }
+        await asyncio.sleep(3)
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                return None
+            
+    async def process_user_signin(self, address: str, use_proxy: bool, rotate_proxy: bool):
         print(
             f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-            f"{Fore.YELLOW + Style.BRIGHT}{message}{Style.RESET_ALL}",
+            f"{Fore.YELLOW + Style.BRIGHT}Try To Login, Wait...{Style.RESET_ALL}",
             end="\r",
             flush=True
         )
@@ -424,144 +570,145 @@ class KiteAi:
         proxy = self.get_next_proxy_for_account(address) if use_proxy else None
 
         if rotate_proxy:
-            is_valid = None
-            while is_valid is None:
-                is_valid = await self.check_connection(proxy)
-                if not is_valid:
+            access_token = None
+            header_cookie = None
+            while access_token is None or header_cookie is None:
+                access_token, header_cookie = await self.user_signin(address, proxy)
+                if not access_token or not header_cookie:
                     self.log(
-                        f"{Fore.CYAN+Style.BRIGHT}Proxy   :{Style.RESET_ALL}"
-                        f"{Fore.WHITE+Style.BRIGHT} {proxy} {Style.RESET_ALL}"
+                        f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
+                        f"{Fore.RED+Style.BRIGHT} Login Failed {Style.RESET_ALL}"
                         f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                        f"{Fore.RED+Style.BRIGHT} Not 200 OK, {Style.RESET_ALL}"
-                        f"{Fore.YELLOW+Style.BRIGHT}Rotating Proxy...{Style.RESET_ALL}"
+                        f"{Fore.YELLOW+Style.BRIGHT} Rotating Proxy {Style.RESET_ALL}"
                     )
                     proxy = self.rotate_proxy_for_account(address) if use_proxy else None
                     await asyncio.sleep(5)
                     continue
 
-                self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Proxy   :{Style.RESET_ALL}"
-                    f"{Fore.WHITE+Style.BRIGHT} {proxy} {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                    f"{Fore.GREEN+Style.BRIGHT} 200 OK {Style.RESET_ALL}                  "
-                )
+                self.access_tokens[address] = access_token
+                self.header_cookies[address] = header_cookie
 
+                self.log(
+                    f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
+                    f"{Fore.GREEN+Style.BRIGHT} Login Success {Style.RESET_ALL}                  "
+                )
                 return True
 
-        is_valid = await self.check_connection(proxy)
-        if not is_valid:
+        access_token, header_cookie = await self.user_signin(address, proxy)
+        if not access_token or not header_cookie:
             self.log(
-                f"{Fore.CYAN+Style.BRIGHT}Proxy   :{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {proxy} {Style.RESET_ALL}"
+                f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
+                f"{Fore.RED+Style.BRIGHT} Login Failed {Style.RESET_ALL}"
                 f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-                f"{Fore.RED+Style.BRIGHT} Not 200 OK {Style.RESET_ALL}          "
+                f"{Fore.YELLOW+Style.BRIGHT} Skipping This Account {Style.RESET_ALL}"
             )
             return False
         
+        self.access_tokens[address] = access_token
+        self.header_cookies[address] = header_cookie
+        
         self.log(
-            f"{Fore.CYAN+Style.BRIGHT}Proxy   :{Style.RESET_ALL}"
-            f"{Fore.WHITE+Style.BRIGHT} {proxy} {Style.RESET_ALL}"
-            f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
-            f"{Fore.GREEN+Style.BRIGHT} 200 OK {Style.RESET_ALL}                  "
+            f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
+            f"{Fore.GREEN+Style.BRIGHT} Login Success {Style.RESET_ALL}                  "
         )
-
         return True
         
-    async def process_accounts(self, address: str, use_proxy: bool, rotate_proxy: bool):
-        is_valid = await self.process_check_connection(address, use_proxy, rotate_proxy)
-        if is_valid:
+    async def process_accounts(self, address: str, interact_count: int, use_proxy: bool, rotate_proxy: bool):
+        signed = await self.process_user_signin(address, use_proxy, rotate_proxy)
+        if signed:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-
-            total_interactions = "N/A"
-            stats = await self.user_stats(address, proxy)
-            if stats:
-                total_interactions = stats["total_interactions"]
-
             self.log(
-                f"{Fore.GREEN + Style.BRIGHT}Total Interactions With Agents Is{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} {total_interactions} {Style.RESET_ALL}"
+                f"{Fore.CYAN+Style.BRIGHT}Proxy     :{Style.RESET_ALL}"
+                f"{Fore.WHITE+Style.BRIGHT} {proxy} {Style.RESET_ALL}"
             )
+        
+            user = await self.user_data(address, proxy)
+            if not user:
+                self.log(
+                    f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} GET User Data Failed {Style.RESET_ALL}"
+                )
+                return
+            
+            username = user.get("data", {}).get("profile", {}).get("username", "Unknown")
+            sa_address = user.get("data", {}).get("profile", {}).get("smart_account_address", "Undifined").upper()
+            balance = user.get("data", {}).get("profile", {}).get("total_xp_points", 0)
+            
+            self.log(
+                f"{Fore.CYAN+Style.BRIGHT}Username  :{Style.RESET_ALL}"
+                f"{Fore.WHITE+Style.BRIGHT} {username} {Style.RESET_ALL}"
+            )
+            
+            self.log(
+                f"{Fore.CYAN+Style.BRIGHT}SA Address:{Style.RESET_ALL}"
+                f"{Fore.WHITE+Style.BRIGHT} {sa_address} {Style.RESET_ALL}"
+            )
+            self.log(
+                f"{Fore.CYAN+Style.BRIGHT}Balance   :{Style.RESET_ALL}"
+                f"{Fore.WHITE+Style.BRIGHT} {balance} XP {Style.RESET_ALL}"
+            )
+            self.log(f"{Fore.CYAN+Style.BRIGHT}AI Agents :{Style.RESET_ALL}")
 
             self.user_interactions[address] = 0
 
-            while self.user_interactions[address] < 20:
-
-                self.user_interactions[address] += 1
-                    
+            while self.user_interactions[address] < interact_count:
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}●{Style.RESET_ALL}"
-                    f"{Fore.YELLOW + Style.BRIGHT} Interaction {Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT}{self.user_interactions[address]} of 20{Style.RESET_ALL}"
+                    f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                    f"{Fore.BLUE + Style.BRIGHT}Interactions{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} {self.user_interactions[address] + 1} of {interact_count} {Style.RESET_ALL}"
                 )
 
                 agent_names = ["Professor", "Crypto Buddy", "Sherlock"]
-
                 agents = self.agent_lists(random.choice(agent_names))
                 if agents:
-                    agent_url = agents["agent_url"]
-                    agent_id = agents["agent_id"]
-                    agent_name = agents["name"]
-                    req_text = agents["question"]
+                    service_id = agents["service_id"]
+                    agent_name = agents["title"]
+                    question = agents["message"]
 
                     self.log(
                         f"{Fore.CYAN + Style.BRIGHT}    Agent Name: {Style.RESET_ALL}"
                         f"{Fore.WHITE + Style.BRIGHT}{agent_name}{Style.RESET_ALL}"
                     )
                     self.log(
-                        f"{Fore.CYAN + Style.BRIGHT}    Agent Id  : {Style.RESET_ALL}"
-                        f"{Fore.WHITE + Style.BRIGHT}{agent_id}{Style.RESET_ALL}"
-                    )
-                    self.log(
                         f"{Fore.CYAN + Style.BRIGHT}    Question  : {Style.RESET_ALL}"
-                        f"{Fore.WHITE + Style.BRIGHT}{req_text}{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}{question}{Style.RESET_ALL}"
                     )
 
-                    perform_agent = await self.perfrom_agent(agent_url, req_text, proxy)
-                    if perform_agent:
-                        resp_text = perform_agent["resp_text"]
-                        ttft = perform_agent["ttft"]
-                        total_time = perform_agent["total_time"]
-
+                    answer = await self.agent_inference(address, service_id, question, proxy)
+                    if answer:
+                        self.user_interactions[address] += 1
                         self.log(
                             f"{Fore.CYAN + Style.BRIGHT}    Answer    : {Style.RESET_ALL}"
-                            f"{Fore.WHITE + Style.BRIGHT}{resp_text.strip()}{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT}{answer.strip()}{Style.RESET_ALL}"
                         )
 
-                        report = await self.report_usage(address, agent_id, req_text, resp_text, ttft, total_time, proxy)
-                        if report and report.get("message") == "Usage report successfully recorded":
-                            interaction_id = report["interaction_id"]
+                        submit = await self.submit_receipt(address, sa_address, service_id, question, answer, proxy)
+                        if submit:
                             self.log(
                                 f"{Fore.CYAN + Style.BRIGHT}    Status    : {Style.RESET_ALL}"
-                                f"{Fore.GREEN + Style.BRIGHT}Usage Report Successfully Recorded{Style.RESET_ALL}"
-                            )
-                            self.log(
-                                f"{Fore.MAGENTA + Style.BRIGHT}      >{Style.RESET_ALL}"
-                                f"{Fore.BLUE + Style.BRIGHT} Interaction Id: {Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT}{interaction_id}{Style.RESET_ALL}"
+                                f"{Fore.GREEN + Style.BRIGHT}Receipt Submited Successfully{Style.RESET_ALL}"
                             )
                         else:
                             self.log(
                                 f"{Fore.CYAN + Style.BRIGHT}    Status    : {Style.RESET_ALL}"
-                                f"{Fore.RED + Style.BRIGHT}Usage Report Failed to Recorded{Style.RESET_ALL}"
+                                f"{Fore.RED + Style.BRIGHT}Submit Receipt Failed{Style.RESET_ALL}"
                             )
-                            self.user_interactions[address] -= 1
                     else:
                         self.log(
                             f"{Fore.CYAN + Style.BRIGHT}    Status    : {Style.RESET_ALL}"
-                            f"{Fore.RED + Style.BRIGHT}Interaction With Agent Failed{Style.RESET_ALL}"
+                            f"{Fore.RED + Style.BRIGHT}Interaction Failed{Style.RESET_ALL}"
                         )
-                        self.user_interactions[address] -= 1
 
                     await asyncio.sleep(random.randint(5, 10))
 
-            self.user_interactions[address] = 0
+        self.user_interactions[address] = 0
 
     async def main(self):
         try:
             with open('accounts.txt', 'r') as file:
                 accounts = [line.strip() for line in file if line.strip()]
             
-            use_proxy_choice, rotate_proxy = self.print_question()
+            interact_count, use_proxy_choice, rotate_proxy = self.print_question()
 
             while True:
                 use_proxy = False
@@ -579,15 +726,22 @@ class KiteAi:
                     await self.load_proxies(use_proxy_choice)
                 
                 separator = "=" * 25
-                for address in accounts:
-                    if address:
-                        self.log(
-                            f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
-                            f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(address)} {Style.RESET_ALL}"
-                            f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
-                        )
-                        await self.process_accounts(address, use_proxy, rotate_proxy)
-                        await asyncio.sleep(3)
+                for account in accounts:
+                    if account:
+                        address = self.generate_address(account)
+
+                        if address:
+                            auth_token = self.generate_auth_token(address)
+
+                            if auth_token:
+                                self.auth_tokens[address] = auth_token
+                                self.log(
+                                    f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(address)} {Style.RESET_ALL}"
+                                    f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+                                )
+                                await self.process_accounts(address, interact_count, use_proxy, rotate_proxy)
+                                await asyncio.sleep(3)
 
                 self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*72)
                 seconds = 24 * 60 * 60
@@ -619,5 +773,5 @@ if __name__ == "__main__":
         print(
             f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-            f"{Fore.RED + Style.BRIGHT}[ EXIT ] Kite Ai Agents - BOT{Style.RESET_ALL}                                       "                              
+            f"{Fore.RED + Style.BRIGHT}[ EXIT ] Kite Ai Ozone - BOT{Style.RESET_ALL}                                       "                              
         )
