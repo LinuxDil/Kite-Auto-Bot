@@ -45,15 +45,15 @@ socks5://user:pass@host:port
 
 2. Create a `accounts.txt` file for multiple wallets:
 ```
-wallet address
-wallet address 2
+private key
+private key 2
 ```
 
 ## 🚀 Usage
 
 Run the bot:
 ```bash
-python3 bot.py
+python3 main.py
 ```
 
 The bot will prompt you to:
@@ -63,7 +63,7 @@ The bot will prompt you to:
 
 ## ⚙️ Configuration Options
 
-You can modify the following settings in `bot.py`:
+You can modify the following settings in `main.py`:
 
 ## ⚠️ Disclaimer
 
