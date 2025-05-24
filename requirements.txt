@@ -5,3 +5,4 @@ cryptography==36.0.0
 eth-account==0.13.7
 colorama==0.4.6
 pytz==2024.1
+pyfiglet
