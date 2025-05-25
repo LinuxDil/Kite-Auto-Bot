@@ -12,6 +12,12 @@ import shutil
 
 wib = pytz.timezone('Asia/Jakarta')
 
+subnet_address = [
+    "0xc368ae279275f80125284d16d292b650ecbbff8d", # BitMind
+    "0xca312b44a57cc9fd60f37e6c9a343a1ad92a3b6c", # Bitte
+    "0xb132001567650917d6bd695d1fab55db7986e9a5"  # Kite Ai Agents
+]
+
 class KiteAi:
     def __init__(self) -> None:
         self.headers = {
@@ -51,7 +57,8 @@ class KiteAi:
         term_width = shutil.get_terminal_size().columns
 
         for line in banner_lines:
-            print(Fore.GREEN + Style.BRIGHT + line.center(term_width) + Style.RESET_ALL)
+            print(Fore.GREEN + Style.BRIGHT + line.center(term_width) + Style.RESET_ALL
+        )
 
     def format_seconds(self, seconds):
         hours, remainder = divmod(seconds, 3600)
@@ -120,26 +127,22 @@ class KiteAi:
             return address
         except Exception as e:
             return None
-    
-    def hex_to_bytes(self, hex_str):
-        return bytes.fromhex(hex_str)
-
-    def bytes_to_hex(self, bytes):
-        return binascii.hexlify(bytes).decode()
-
-    def encrypt(self, address):
-        key = self.hex_to_bytes(self.KEY_HEX)
-        iv = os.urandom(12)
-        encryptor = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend()).encryptor()
-
-        ciphertext = encryptor.update(address.encode()) + encryptor.finalize()
-        auth_tag = encryptor.tag
-
-        result = iv + ciphertext + auth_tag
-        return self.bytes_to_hex(result)
 
     def generate_auth_token(self, address):
-        return self.encrypt(address)
+        try:
+            key = bytes.fromhex(self.KEY_HEX)
+            iv = os.urandom(12)
+            encryptor = Cipher(algorithms.AES(key), modes.GCM(iv), backend=default_backend()).encryptor()
+
+            ciphertext = encryptor.update(address.encode()) + encryptor.finalize()
+            auth_tag = encryptor.tag
+
+            result = iv + ciphertext + auth_tag
+            result_hex = binascii.hexlify(result).decode()
+
+            return result_hex
+        except Exception as e:
+            return None
     
     def generate_quiz_title(self):
         today = datetime.today().strftime('%Y-%m-%d')
@@ -367,7 +370,7 @@ class KiteAi:
 
         while True:
             try:
-                count = int(input(f"{Fore.YELLOW + Style.BRIGHT}How Many Times Would You Like to Interact With Kite AI Agents? -> {Style.RESET_ALL}").strip())
+                count = int(input(f"{Fore.YELLOW + Style.BRIGHT}How Many Times Would You Like to Interact With Kite AI Agents?:{Style.RESET_ALL}").strip())
                 if count > 0:
                     break
                 else:
@@ -443,7 +446,6 @@ class KiteAi:
             try:
                 async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
                     async with session.post(url=url, headers=headers, data=data) as response:
-                        self.log(await response.text())
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -473,9 +475,9 @@ class KiteAi:
                     continue
                 return None
             
-    async def submit_quiz(self, address: str, proxy=None, retries=5):
+    async def submit_quiz(self, address: str, quiz_id: int, question_id: int, quiz_answer: str, proxy=None, retries=5):
         url = f"{self.NEO_API}/quiz/submit"
-        data = json.dumps({})
+        data = json.dumps({"quiz_id":quiz_id, "question_id":question_id, "answer":quiz_answer, "finish":True, "eoa":address})
         headers = {
             **self.headers,
             "Authorization": f"Bearer {self.access_tokens[address]}",
@@ -489,6 +491,75 @@ class KiteAi:
             try:
                 async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
                     async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                return None
+            
+    async def token_balance(self, address: str, proxy=None, retries=5):
+        url = f"{self.OZONE_API}/me/balance"
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {self.access_tokens[address]}"
+        }
+        await asyncio.sleep(3)
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.get(url=url, headers=headers) as response:
+                        self.log(await response.text())
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                return None
+            
+    async def delegate_token(self, address: str, subnet_address: str, amount: int, proxy=None, retries=5):
+        url = f"{self.OZONE_API}/subnet/delegate"
+        data = json.dumps({"subnet_address":subnet_address, "amount":amount})
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {self.access_tokens[address]}",
+            "Content-Length": str(len(data)),
+            "Content-Type": "application/json"
+        }
+        await asyncio.sleep(3)
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        self.log(await response.text())
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+                return None
+            
+    async def claim_delegate(self, address: str, subnet_address: str, proxy=None, retries=5):
+        url = f"{self.OZONE_API}/subnet/claim-rewards"
+        data = json.dumps({"subnet_address":subnet_address})
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {self.access_tokens[address]}",
+            "Content-Length": str(len(data)),
+            "Content-Type": "application/json"
+        }
+        await asyncio.sleep(3)
+        for attempt in range(retries):
+            connector = ProxyConnector.from_url(proxy) if proxy else None
+            try:
+                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        self.log(await response.text())
                         response.raise_for_status()
                         return await response.json()
             except (Exception, ClientResponseError) as e:
@@ -647,6 +718,84 @@ class KiteAi:
                 f"{Fore.CYAN+Style.BRIGHT}Balance   :{Style.RESET_ALL}"
                 f"{Fore.WHITE+Style.BRIGHT} {balance} XP {Style.RESET_ALL}"
             )
+
+            create = await self.create_quiz(address, proxy)
+            if create:
+                self.log(f"{Fore.CYAN+Style.BRIGHT}Daily Quiz:{Style.RESET_ALL}")
+
+                quiz_id = create.get("data", {}).get("quiz_id")
+                status = create.get("data", {}).get("status")
+
+                if status == 0:
+                    quiz = await self.get_quiz(address, quiz_id, proxy)
+                    if quiz:
+                        quiz_questions = quiz.get("data", {}).get("question", [])
+
+                        if quiz_questions:
+                            for quiz_question in quiz_questions:
+                                if quiz_question:
+                                    question_id = quiz_question.get("question_id")
+                                    quiz_content = quiz_question.get("content")
+                                    quiz_answer = quiz_question.get("answer")
+
+                                    self.log(
+                                        f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                                        f"{Fore.BLUE + Style.BRIGHT}Question:{Style.RESET_ALL}"
+                                        f"{Fore.WHITE+Style.BRIGHT} {quiz_content} {Style.RESET_ALL}"
+                                    )
+                                    self.log(
+                                        f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                                        f"{Fore.BLUE + Style.BRIGHT}Answer  :{Style.RESET_ALL}"
+                                        f"{Fore.WHITE+Style.BRIGHT} {quiz_answer} {Style.RESET_ALL}"
+                                    )
+
+                                    submit_quiz = await self.submit_quiz(address, quiz_id, question_id, quiz_answer, proxy)
+                                    if submit_quiz:
+                                        result = submit_quiz.get("data", {}).get("result")
+
+                                        if result == "RIGHT":
+                                            self.log(
+                                                f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                                                f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                                                f"{Fore.GREEN+Style.BRIGHT} Answered Successfully {Style.RESET_ALL}"
+                                            )
+                                        else:
+                                            self.log(
+                                                f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                                                f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                                                f"{Fore.YELLOW+Style.BRIGHT} Wrong Answer {Style.RESET_ALL}"
+                                            )
+                                    else:
+                                        self.log(
+                                            f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                                            f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                                            f"{Fore.RED+Style.BRIGHT} Submit Answer Failed {Style.RESET_ALL}"
+                                        )
+                        else:
+                            self.log(
+                                f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                                f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                                f"{Fore.RED+Style.BRIGHT} GET Quiz Answer Failed {Style.RESET_ALL}"
+                            )
+                    else:
+                        self.log(
+                            f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                            f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                            f"{Fore.RED+Style.BRIGHT} GET Quiz Question Failed {Style.RESET_ALL}"
+                        )
+                else:
+                    self.log(
+                        f"{Fore.MAGENTA + Style.BRIGHT}  ● {Style.RESET_ALL}"
+                        f"{Fore.BLUE + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Already Answered {Style.RESET_ALL}"
+                    )
+            else:
+                self.log(
+                    f"{Fore.CYAN+Style.BRIGHT}Daily Quiz:{Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} GET Data Failed {Style.RESET_ALL}"
+                )
+
+
             self.log(f"{Fore.CYAN+Style.BRIGHT}AI Agents :{Style.RESET_ALL}")
 
             self.user_interactions[address] = 0
@@ -729,19 +878,23 @@ class KiteAi:
                 for account in accounts:
                     if account:
                         address = self.generate_address(account)
-
-                        if address:
-                            auth_token = self.generate_auth_token(address)
-
-                            if auth_token:
-                                self.auth_tokens[address] = auth_token
-                                self.log(
-                                    f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
-                                    f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(address)} {Style.RESET_ALL}"
-                                    f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
-                                )
-                                await self.process_accounts(address, interact_count, use_proxy, rotate_proxy)
-                                await asyncio.sleep(3)
+                        if not address:
+                            self.log(f"{Fore.RED+Style.BRIGHT}Generate address failed, check your data at accounts.txt.{Style.RESET_ALL}")
+                            continue
+                        
+                        auth_token = self.generate_auth_token(address)
+                        if not auth_token:
+                            self.log(f"{Fore.RED+Style.BRIGHT}Generate auth token failed, check your cryptography library version first.{Style.RESET_ALL}")
+                            continue
+                        
+                        self.auth_tokens[address] = auth_token
+                        self.log(
+                            f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(address)} {Style.RESET_ALL}"
+                            f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+                        )
+                        await self.process_accounts(address, interact_count, use_proxy, rotate_proxy)
+                        await asyncio.sleep(3)
 
                 self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}"*72)
                 seconds = 24 * 60 * 60
@@ -761,7 +914,7 @@ class KiteAi:
         except FileNotFoundError:
             self.log(f"{Fore.RED}File 'accounts.txt' Not Found.{Style.RESET_ALL}")
             return
-        except Exception as e:
+        except (Exception, ValueError) as e:
             self.log(f"{Fore.RED+Style.BRIGHT}Error: {e}{Style.RESET_ALL}")
             raise e
 
