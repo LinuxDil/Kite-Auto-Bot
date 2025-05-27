@@ -210,7 +210,7 @@ class KiteAi:
                 "How does Kite AI handle code refactoring?",
                 "What are Kite AI's monitoring capabilities?",
                 "How does Kite AI support remote development?",
-                "What is Kite AI's approach to technical debt?",
+                "What is Kite AI approach to technical debt?",
                 "How does Kite AI handle code dependencies?",
                 "What are Kite AI's performance metrics?",
                 "How does Kite AI support code documentation?",
