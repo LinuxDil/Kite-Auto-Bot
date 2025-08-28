@@ -15,7 +15,7 @@ wib = pytz.timezone('Asia/Jakarta')
 subnet_address = [
     "0xc368ae279275f80125284d16d292b650ecbbff8d", # BitMind
     "0xca312b44a57cc9fd60f37e6c9a343a1ad92a3b6c", # Bitte
-    "0xb132001567650917d6bd695d1fab55db7986e9a5"  # Kite Ai Agents.
+    "0xb132001567650917d6bd695d1fab55db7986e9a5"  # Kite Ai Agents. dude
 ]
 
 class KiteAi:
